@@ -203,6 +203,7 @@ public interface HystrixCircuitBreaker {
         @Override
         public void markSuccess() {
             if (status.compareAndSet(Status.HALF_OPEN, Status.CLOSED)) {
+                System.out.println("Thread3 markSuccess() : half-open -> closed");
                 //This thread wins the race to close the circuit - it resets the stream to start it over from 0
                 metrics.resetStream();
                 Subscription previousSubscription = activeSubscription.get();
@@ -211,6 +212,7 @@ public interface HystrixCircuitBreaker {
                 }
                 Subscription newSubscription = subscribeToStream();
                 activeSubscription.set(newSubscription);
+                System.out.println("Thread3 markSuccess() : circuitOpened.set(-1L)");
                 circuitOpened.set(-1L);
             }
         }
@@ -218,7 +220,13 @@ public interface HystrixCircuitBreaker {
         @Override
         public void markNonSuccess() {
             if (status.compareAndSet(Status.HALF_OPEN, Status.OPEN)) {
+                System.out.println("Thread1 markNonSuccess():half-open -> opened");
+                Thread.yield();
+                Thread.yield();
+                Thread.yield();
+                Thread.yield();
                 //This thread wins the race to re-open the circuit - it resets the start time for the sleep window
+                System.out.println("Thread1 markNonSuccess():circuitOpened.set(System.currentTimeMillis())");
                 circuitOpened.set(System.currentTimeMillis());
             }
         }
@@ -253,7 +261,7 @@ public interface HystrixCircuitBreaker {
             }
         }
 
-        private boolean isAfterSleepWindow() {
+        boolean isAfterSleepWindow() {
             final long circuitOpenTime = circuitOpened.get();
             final long currentTime = System.currentTimeMillis();
             final long sleepWindowTime = properties.circuitBreakerSleepWindowInMilliseconds().get();
@@ -277,6 +285,8 @@ public interface HystrixCircuitBreaker {
                     //if the executing command fails, the status will transition to OPEN
                     //if the executing command gets unsubscribed, the status will transition to OPEN
                     if (status.compareAndSet(Status.OPEN, Status.HALF_OPEN)) {
+                        System.out.println("Thread2/3 attemptExecution(): open -> half-open");
+                        Thread.yield();
                         return true;
                     } else {
                         return false;
@@ -285,6 +295,14 @@ public interface HystrixCircuitBreaker {
                     return false;
                 }
             }
+        }
+
+        Status getStatus() {
+            return status.get();
+        }
+
+        AtomicLong getCircuitOpened() {
+            return circuitOpened;
         }
     }
 
